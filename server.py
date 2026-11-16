@@ -1000,12 +1000,31 @@ async def get_file(file_id: str, current_user=Depends(verify_token)):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _client_ip(request: Request) -> str:
-    """Extract client IP behind Render/Vercel proxy chain."""
-    xff = request.headers.get("x-forwarded-for", "")
-    if xff:
-        # Last hop is appended by Render's proxy; earlier entries are client-supplied and spoofable.
-        return xff.split(",")[-1].strip()
+    """Real visitor IP behind Render, which sits behind Cloudflare.
+
+    Render's X-Forwarded-For is "<anything the client sent>, <client>, <Cloudflare edge>":
+    the last entry is a Cloudflare edge shared by everyone nearby (so lockout and booking
+    limits hit all local users together) and the first is client-controlled. Cloudflare
+    overwrites CF-Connecting-IP with the real client, so prefer it; otherwise take the
+    entry before the edge. Check on the live site with GET /api/auth/client-ip (owner)."""
+    cf = request.headers.get("cf-connecting-ip", "").strip()
+    if cf:
+        return cf
+    hops = [h.strip() for h in request.headers.get("x-forwarded-for", "").split(",") if h.strip()]
+    if len(hops) >= 2:
+        return hops[-2]
+    if hops:
+        return hops[0]
     return request.client.host if request.client else "unknown"
+
+
+@api_router.get("/auth/client-ip")
+async def client_ip_check(request: Request, current_user=Depends(require_admin)):
+    """Owner-only: what the login lockout sees as your IP. It should match your real
+    public IP (search "what is my ip"); a Cloudflare address means _client_ip needs work."""
+    return {"client_ip": _client_ip(request),
+            "x_forwarded_for": request.headers.get("x-forwarded-for", ""),
+            "cf_connecting_ip": request.headers.get("cf-connecting-ip", "")}
 
 
 _DUMMY_PW_HASH = pwd_ctx.hash(secrets.token_urlsafe(16))  # random; matches no password
