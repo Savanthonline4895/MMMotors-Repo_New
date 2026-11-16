@@ -44,7 +44,7 @@ function QuickAction({ label, desc, onClick }) {
   );
 }
 
-const PAGE_NAMES = { parts: 'Parts', service: 'Service', reports: 'Reports' };
+const PAGE_NAMES = { parts: 'Parts', service: 'Service', reports: 'Reports', bookings: 'Bike Bookings' };
 
 function AlertRow({ tag, tagClass, message, page, onClick }) {
   return (
@@ -108,6 +108,7 @@ export default function DashboardPage({ setActive }) {
   const alerts = [];
   if (pts.low_stock   > 0) alerts.push({ tag:'Low stock',    cls:'pill-amber', msg:`${pts.low_stock} parts below reorder level`,      page:'parts' });
   if (pts.out_of_stock> 0) alerts.push({ tag:'Out of stock', cls:'pill-red',   msg:`${pts.out_of_stock} parts out of stock`,          page:'parts' });
+  if (raw?.bookings_ready > 0) alerts.push({ tag:'Booking', cls:'pill-green', msg:`${raw.bookings_ready} booked bike${raw.bookings_ready>1?'s are':' is'} now in stock: tell the customer`, page:'bookings' });
   if (svc.ready       > 0) alerts.push({ tag:'Ready',        cls:'pill-green', msg:`${svc.ready} vehicle${svc.ready>1?'s':''} ready for pickup`, page:'service' });
   if (thisMonthPnl && thisMonthPnl.profit < 0) alerts.push({ tag:'Loss', cls:'pill-red', msg:`This month is at a loss: expenses exceed revenue by ${fmt(Math.abs(thisMonthPnl.profit))}`, page:'reports' });
 

@@ -18,6 +18,7 @@ import SalesPage     from './pages/SalesPage';
 import VehiclesPage  from './pages/VehiclesPage';
 import CustomersPage from './pages/CustomersPage';
 import DebtPage      from './pages/DebtPage';
+import VehicleBookingsPage from './pages/VehicleBookingsPage';
 import ServiceDuePage from './pages/ServiceDuePage';
 import ExpensesPage          from './pages/ExpensesPage';
 import AccidentEstimatePage  from './pages/AccidentEstimatePage';
@@ -26,6 +27,7 @@ import PurchaseBillsPage     from './pages/PurchaseBillsPage';
 import FeedbackPage          from './pages/FeedbackPage';
 import FollowupsPage         from './pages/FollowupsPage';
 import BookingPage           from './pages/BookingPage';
+import ReviewPage            from './pages/ReviewPage';
 import Sidebar from './components/Sidebar';
 import Topbar  from './components/Topbar';
 
@@ -53,10 +55,11 @@ function AppLayout() {
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
   // Public customer pages — must render without a login
-  if (location.pathname.startsWith('/feedback/') || location.pathname === '/book') return (
+  if (location.pathname.startsWith('/feedback/') || location.pathname === '/book' || location.pathname === '/review') return (
     <Routes>
       <Route path="/feedback/:token" element={<FeedbackPage />} />
       <Route path="/book" element={<BookingPage />} />
+      <Route path="/review" element={<ReviewPage />} />
     </Routes>
   );
 
@@ -87,6 +90,7 @@ function AppLayout() {
               <Route path="/customers" element={<CustomersPage />} />
               <Route path="/followups" element={<FollowupsPage />} />
               <Route path="/debt"         element={<DebtPage />} />
+              <Route path="/bookings"     element={<VehicleBookingsPage />} />
               <Route path="/service-due"  element={<ServiceDuePage />} />
               <Route path="/expenses"     element={<ExpensesPage />} />
               <Route path="/accident-estimate" element={<AccidentEstimatePage />} />

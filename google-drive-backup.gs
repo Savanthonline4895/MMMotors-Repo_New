@@ -22,6 +22,9 @@ var KEEP_DAYS = 30;
 
 /** Run once by hand after pasting: authorises Drive + network access and adds the nightly trigger. */
 function setup() {
+  // Google's consent screen lets each permission be unticked; without "Connect to an
+  // external service" every backup fails. This re-asks for anything missing.
+  ScriptApp.requireAllScopes(ScriptApp.AuthMode.FULL);
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'runBackup') ScriptApp.deleteTrigger(t);
   });

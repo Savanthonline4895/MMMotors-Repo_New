@@ -226,6 +226,13 @@ export const dashboardApi = {
   recentActivity: () => api.get('/dashboard/recent-activity'),
 };
 
+export const vehicleBookingsApi = {
+  list:   (params) => api.get('/vehicle-bookings', { params }),
+  create: (data)   => api.post('/vehicle-bookings', data),
+  update: (id, d)  => api.put(`/vehicle-bookings/${id}`, d),
+  delete: (id)     => api.delete(`/vehicle-bookings/${id}`),
+};
+
 export const expensesApi = {
   list:   (params) => api.get('/expenses', { params }),
   create: (data)   => api.post('/expenses', data),

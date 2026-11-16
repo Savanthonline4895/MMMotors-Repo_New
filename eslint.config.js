@@ -23,7 +23,13 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // ignoreRestSiblings: `const { _key, ...rest } = row` is how we drop a field
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]', ignoreRestSiblings: true }],
+      // Hooks that live next to their provider/component; editing these files does a full reload
+      'react-refresh/only-export-components': ['error', {
+        allowConstantExport: true,
+        allowExportNames: ['useConfirm', 'useSortable', 'useAuth', 'useBadgeTypes', 'useCustomerBadgesMap', 'useBadges', 'useDraft'],
+      }],
     },
   },
 ])

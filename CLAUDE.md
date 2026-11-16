@@ -21,7 +21,12 @@ Motorcycle dealership management system. React + Vite frontend. FastAPI + MongoD
 
 ```
 .
-├── server.py          # FastAPI app, all route handlers, Pydantic models (~6,400 lines, ~150 routes)
+├── server.py          # FastAPI app: lifespan, CORS, middleware, health; imports routes/ in order (~330 lines)
+├── routes/            # route modules (~155 routes in total), one per area — see Architecture
+├── common.py          # config + helpers several route modules share (sheet sync, audit map, …)
+├── models.py          # Pydantic request models
+├── routers.py         # api_router (/api) and import_router (/api/import)
+├── pytest.ini         # pythonpath = . so plain `pytest` finds server.py
 ├── database.py        # Shared DB state, auth helpers, GST utils, normalizers
 ├── google-sheet-sync.gs  # Apps Script pasted into the shop's sales spreadsheet
 ├── google-drive-backup.gs # Apps Script (own project) — nightly backup ZIP to Google Drive
@@ -63,6 +68,7 @@ Motorcycle dealership management system. React + Vite frontend. FastAPI + MongoD
         ├── LoginPage.jsx
         ├── DashboardPage.jsx
         ├── VehiclesPage.jsx
+        ├── VehicleBookingsPage.jsx # /bookings — advances for new bikes, waiting list
         ├── SalesPage.jsx           # ~1,070 lines, includes print + PDF path
         ├── ServicePage.jsx         # job list + booking limit; modals live in service/
         ├── service/
@@ -99,9 +105,12 @@ Motorcycle dealership management system. React + Vite frontend. FastAPI + MongoD
 
 ## Architecture
 
-**Two-module backend** — never circular-import:
+**Backend layout** (split out of one 6,500-line `server.py` on 16 Nov 2026, code moved verbatim):
 - `database.py` — config, DB globals, auth, helpers, GST calc, number-to-words. No FastAPI app dependency.
-- `server.py` — imports from `database.py`. Owns the FastAPI `app`, all Pydantic models, and both routers.
+- `routers.py` — `api_router` / `import_router`. `models.py` — Pydantic models. `common.py` — shared config/helpers.
+- `routes/<area>.py` — one module per area (files, auth, customers, vehicles, sales, service, service_bills, purchasing, parts, reports, imports, ledger, backup, accident, followups, vehicle_bookings). Each registers on the shared routers **when imported**.
+- `server.py` — owns `app`, lifespan, CORS and middleware, and imports `routes.*` **in the original section order** (route order matters, e.g. `/parts/suggest-priority` before `/parts/{part_id}`), then `include_router`. A route module may import another route module (no cycles today); never import `server` from a route module.
+- **DB handle:** every route module (and `common`) has its own module-level `db = None` / `fs = None`; `lifespan` sets them for all of `server._DB_MODULES`, and `tests/conftest.py` patches the same list. A new route module must be added to the imports and `_DB_MODULES` in `server.py`. Pinned by `tests/test_startup.py` (runs the real lifespan on in-memory Mongo).
 
 **Two routers, both mounted directly under `/api`:**
 - `api_router = APIRouter(prefix="/api")` — everything (auth, CRUD, reports, dashboard, files, migrations, backup)
@@ -110,7 +119,7 @@ Motorcycle dealership management system. React + Vite frontend. FastAPI + MongoD
 > NOTE: There is **no `/api/v1`** prefix. Frontend calls hit `/api/...` directly.
 > `src/api/client.js` sets `baseURL: "${VITE_API_URL}/api"` — do not double-prefix.
 
-**DB globals** (`client`, `db`, `fs`) live in `database.py`, populated by `server.py`'s lifespan on startup. `server.py` keeps module-level `db`/`fs` aliases mirroring `_db.db`/`_db.fs`.
+**DB globals** (`client`, `db`, `fs`) live in `database.py`, populated by `server.py`'s lifespan on startup, which also copies `db`/`fs` into `server` and every module in `_DB_MODULES`.
 
 **HTTP middleware** (all in `server.py`):
 - `_csrf_origin_guard` — see Auth → CSRF.
@@ -182,7 +191,7 @@ JWT_SECRET_KEY=test pytest tests/
 - `verify_token` accepts either cookie or `Authorization: Bearer` header
 - Token expiry: 12 hours
 - Max login attempts: 5 per `(username, ip)` · Lockout: 30 min (TTL-collection based)
-- Client IP (`_client_ip`) = **last** `X-Forwarded-For` entry, the one Render's proxy appends. Earlier entries are client-supplied; using the first let attackers rotate fake IPs and skip the lockout.
+- Client IP (`_client_ip`, routes/auth.py, fixed 16 Nov 2026): Render sits behind Cloudflare, so `X-Forwarded-For` arrives as `<client-sent junk>, <client>, <Cloudflare edge>`. The old rule took the **last** entry — a Cloudflare edge shared by everyone nearby, which put most local users in one lockout and booking-limit bucket. Now: `CF-Connecting-IP` (Cloudflare overwrites it) → else the entry before the edge → else the socket address. Owner-only `GET /api/auth/client-ip` shows what the server sees — after a deploy it must equal your real public IP.
 - Roles: `owner` (admin), `staff`
 - Page-level UI gating: `user.allowed_pages` array; `Sidebar.jsx` filters `NAV` by this list
 - `require_admin` — owner only
@@ -231,6 +240,8 @@ All routes on `api_router` are under `/api`. Import routes under `/api/import`.
 | Badge Types      | CRUD `/badge-types` (list: all roles, mutations: admin) — customer labels |
 | Backup           | `GET /backup/export` — ZIP of per-entity xlsx files, admin only, manual download · `GET /backup/auto` — same ZIP, `X-Backup-Key` header, for the nightly Drive script |
 | Change history   | `GET /audit-log?entity=&entity_id=&search=` — admin, newest first |
+| Bike bookings    | CRUD `/vehicle-bookings` (list adds `in_stock_matches`; delete admin-only) |
+| Diagnostics      | `GET /auth/client-ip` — admin, the IP the lockout sees |
 
 Import supports entities: `customers`, `vehicles`, `sales`, `service`, `parts`, `staff`
 
@@ -257,6 +268,7 @@ Import supports entities: `customers`, `vehicles`, `sales`, `service`, `parts`, 
 - `badge_types` — owner-managed customer badges (`name` unique, `color`, `sort_order`); rendered as chips wherever a customer name shows
 - `login_attempts` — TTL 30 min lockout tracking, keyed on `(username, ip)`
 - `counters` — auto-increment sequences via `next_sequence()`
+- `vehicle_bookings` — advance bookings for new bikes (`booking_number` BKG-000001 unique, `status` waiting → arrived → delivered | cancelled)
 - `audit_log` — change history (TTL 2 years on `at`); `service_jobs` also carry `feedback_token` / `feedback_rating` / `feedback_comment`
 
 ---
@@ -297,6 +309,7 @@ Prefixes (`database.py:_PREFIX`):
 - `part_bill` → `PRT-000001` (parts_bills only; legacy parts_sales rows used it too)
 - `part` → `PT-000001`
 - `accident_estimate` → `EST-0001`
+- `booking` → `BKG-000001` (vehicle_bookings)
 
 Service bill numbers **derive from job number** — `SRV-000001` → `SRV-B-000001`. No counter consumed.
 
@@ -376,6 +389,16 @@ Marking a job **Delivered** (status dropdown) or clicking **Feedback** on a deli
 
 The token comes from the job (`update_service_job` issues it on delivered) or `POST /service/{id}/feedback-link`. Pinned by `tests/test_feedback.py`.
 
+### Google reviews from sales customers (14 Nov 2026)
+A printed QR (`public/sales-review-qr.png` / `.svg`, high error correction) opens the public page `/review` (`ReviewPage.jsx`, listed with `/book` and `/feedback/` in App.jsx's public routes). The customer taps 1–5 stars and, optionally, the bike they bought; `src/utils/reviewDraft.js` writes a purchase-experience draft for that star count (several wordings per tier; `variant` keeps the wording stable while the bike name is typed, and typing in the review stops auto-rewrites). **Copy & post on Google** copies it and opens `GOOGLE_REVIEW_URL` (place ID `ChIJd_Mt4MPjrTsRLmE9ia2rZbA`, verified to open M.M. Motors, Malur), where they tap the same stars and paste.
+- Stars are picked on our page because Google's review page cannot be pre-filled.
+- Frontend-only: nothing is stored and no API call is made.
+- Deliberately **not** linked to the Service page or its feedback flow (owner's call).
+- Google rules: the review is posted from the customer's own account, and the button shows for every rating — offering it only to happy customers is review gating.
+
+### Bike bookings (16 Nov 2026)
+`routes/vehicle_bookings.py` + `VehicleBookingsPage.jsx` (/bookings, page id `bookings`, PAGE_ACCESS `vehicle-bookings` → bookings/sales). A customer pays an advance for a bike that isn't in stock; the list computes `in_stock_matches` with `booking_matches()` — same brand **and** model (whitespace/case-insensitive), plus colour only when the customer asked for one; variant is ignored on purpose. Dashboard stats return `bookings_ready` (waiting bookings with a match) → "Booking" alert. Statuses: waiting → arrived ("Bike arrived" sends WhatsApp and sets arrived) → delivered (requires the sale `invoice_number`) or cancelled (`refund_amount` ≤ advance). Saving prints an advance receipt (escapeDeep). Edits are in change history (`audit_ref` knows `booking_number`). Not linked to `create_sale` — the advance is adjusted by hand on the invoice. Pinned by `tests/test_vehicle_bookings.py`.
+
 ### Security
 - No `eval` / `exec` / `pickle` / `yaml.unsafe_load`. No `shell=True`. API keys from env vars only.
 - No f-strings in DB queries — parameterized only.
@@ -429,7 +452,9 @@ After deploy:
 2. Change default owner password immediately.
 3. Set `BACKUP_KEY` and paste `google-drive-backup.gs` into a new Apps Script project (DEPLOY.md Step 9).
 
-CI: `.github/workflows/checks.yml` runs `pytest` (Python 3.11) and `npm run build` on every push; `npm run lint` runs but does not fail the job (9 pre-existing errors — drop `continue-on-error` once fixed). The repo has no `.gitignore` — add one (`node_modules/`, `dist/`, `__pycache__/`, `.env`) before committing from a machine that ran `npm install`.
+4. Sign in as owner and open `/api/auth/client-ip` on the backend: `client_ip` must be your real public IP, not a Cloudflare address.
+
+CI: `.github/workflows/checks.yml` runs `pytest` (Python 3.11), `npm run build` and `npm run lint` (0 errors since 16 Nov 2026 — lint now fails the job). Git: the repo has a `.gitignore` (node_modules, dist, `.env*`, caches); the local repo was started from the zip download (first commit = original code), so link it to GitHub before pushing — see DEPLOY.md.
 
 ---
 
@@ -437,6 +462,7 @@ CI: `.github/workflows/checks.yml` runs `pytest` (Python 3.11) and `npm run buil
 
 ### Backup
 - `GET /backup/export` (admin) → ZIP of per-entity xlsx. `ManualBackupSection` on Dashboard — "Download Backup" button.
+- Contents: customers, vehicles, sales, service jobs, spare parts, expenses, debts, staff, and (since 16 Nov 2026) **service bills, parts bills, purchase bills, vendors and bike bookings** — those five were missing before. Bill line items land as text in an `items` column.
 - **Nightly (09 Nov 2026):** `google-drive-backup.gs` (Apps Script, time trigger 02:00 IST) calls `GET /api/backup/auto` with header `X-Backup-Key` = env `BACKUP_KEY` (≥32 chars, `compare_digest`; endpoint 404s when unset) and saves the ZIP to Drive folder "MM Motors Backups", keeping 30 days. Setup: DEPLOY.md Step 9.
 - Old B2 / APScheduler / boto3 / SMTP stripped 08 Jul 2026.
 
@@ -703,3 +729,13 @@ Owner asked for every app sale to land in the shop's existing "M M Motors Sales"
 10. **Customer feedback** — delivered → instant full-screen smiley rating or WhatsApp link.
 
 Verified: 24 pytest tests pass (real FastAPI + mongomock), `npm run build` passes, lint at the 9-error baseline. Not verified: anything against real Atlas or in a browser — click through the Service/Parts pages, the feedback pop-up and Change history on staging first.
+
+## Changes (16 Nov 2026)
+
+1. **Git** — local repo with `.gitignore`; commit 1 is the original download, later commits are reviewable steps.
+2. **Login/booking IP fix** — `_client_ip` used Cloudflare's edge IP (shared by nearby users); now `CF-Connecting-IP`. Verify with `GET /api/auth/client-ip`.
+3. **Lint 0 errors** and lint blocks CI (rest-sibling idiom allowed; hooks next to providers named for react-refresh).
+4. **Bike bookings** with advances, in-stock matching, Dashboard alert, receipt; **backup ZIP** now includes bills, vendors and bookings.
+5. **server.py split** into `routes/` + `common.py` / `models.py` / `routers.py`; all 155 routes kept, and the 7 pairs of routes that could match the same URL keep their order; 345 of 350 blocks moved byte-for-byte (the 5 others: import lines, lifespan db wiring, sale-PDF logo path now resolved from the repo root).
+
+Verified: 32 tests (incl. real lifespan startup), lint, build; Bike Bookings clicked through in a browser against a local in-memory backend (create, in-stock badge, receipt, WhatsApp, delivered, change history). Not verified: anything on Render/Atlas; the Google Sales sheet's sharing setting (needs the owner's Google account).
