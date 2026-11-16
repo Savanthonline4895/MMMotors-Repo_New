@@ -2,6 +2,8 @@ from fastapi.testclient import TestClient
 
 import database
 import server
+import routes.auth
+import routes.backup
 
 
 def test_login_unknown_user_and_wrong_password_both_401(mongo):
@@ -17,9 +19,9 @@ def test_login_unknown_user_and_wrong_password_both_401(mongo):
 
 def test_auto_backup_is_off_without_key_and_rejects_wrong_key(mongo, monkeypatch):
     c = TestClient(server.app)
-    monkeypatch.setattr(server, "BACKUP_KEY", "")
+    monkeypatch.setattr(routes.backup, "BACKUP_KEY", "")
     assert c.get("/api/backup/auto", headers={"X-Backup-Key": ""}).status_code == 404
-    monkeypatch.setattr(server, "BACKUP_KEY", "k" * 64)
+    monkeypatch.setattr(routes.backup, "BACKUP_KEY", "k" * 64)
     assert c.get("/api/backup/auto", headers={"X-Backup-Key": "wrong"}).status_code == 401
     assert c.get("/api/backup/auto").status_code == 401
     r = c.get("/api/backup/auto", headers={"X-Backup-Key": "k" * 64})
@@ -32,7 +34,7 @@ def test_client_ip_ignores_spoofed_and_edge_entries():
     def ip(headers, client=("10.0.0.9", 1)):
         scope = {"type": "http", "headers": [(k.lower().encode(), v.encode()) for k, v in headers.items()],
                  "client": client}
-        return server._client_ip(Request(scope))
+        return routes.auth._client_ip(Request(scope))
 
     # Cloudflare's own header wins over anything in X-Forwarded-For
     assert ip({"CF-Connecting-IP": "49.37.1.2", "X-Forwarded-For": "6.6.6.6, 49.37.1.2, 104.22.17.40"}) == "49.37.1.2"

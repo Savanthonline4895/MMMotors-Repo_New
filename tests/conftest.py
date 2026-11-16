@@ -65,6 +65,8 @@ def mongo(monkeypatch):
     monkeypatch.setattr(database, "db", db)
     monkeypatch.setattr(database, "client", FakeClient(db))
     monkeypatch.setattr(server, "db", db)
+    for m in server._DB_MODULES:      # route modules hold their own db (set by lifespan in prod)
+        monkeypatch.setattr(m, "db", db)
     loop = asyncio.new_event_loop()
     yield db, loop.run_until_complete
     loop.close()

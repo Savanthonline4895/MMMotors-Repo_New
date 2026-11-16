@@ -28,6 +28,20 @@ git remote add origin https://github.com/YOUR_USERNAME/mmmotors.git
 git push -u origin main
 ```
 
+**Already on GitHub, working from a local repo started from the zip download?** Its first
+commit ("Original code …") is the download; replay the later commits onto GitHub's history
+and push them to a branch, then open a pull request so the checks run before merging:
+
+```bash
+git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git
+git fetch origin
+git rebase --onto origin/main $(git rev-list --max-parents=0 HEAD) main
+git push -u origin main:improvements
+```
+
+If the rebase stops on a conflict, GitHub has changes the zip didn't — fix the file,
+`git add` it and `git rebase --continue`.
+
 ---
 
 ## Step 3 — Backend on Render
