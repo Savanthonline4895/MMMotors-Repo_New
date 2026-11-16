@@ -62,7 +62,7 @@ function AddDebtModal({ onClose }) {
         <div className="record-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)', paddingTop: 'var(--space-lg)' }}>
           {/* Customer search */}
           <div style={{ position: 'relative' }}>
-            <Field label="Customer *">
+            <Field label="Customer *" group>
               {selCust ? (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-sm)', padding: 'var(--space-xs) var(--space-sm)', background: 'color-mix(in oklab, var(--color-accent) 12%, var(--color-paper))', borderRadius: 'var(--radius-control)' }}>
                   <div>

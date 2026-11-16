@@ -134,13 +134,18 @@ def _generate_sale_pdf(sale: dict) -> bytes:
     c.setFont('Sans', 7); c.setFillColor(DIM)
     c.drawString(TC[0], DR_Y + 0.8*mm, f"{sale.get('vehicle_variant','')}  ·  {sale.get('vehicle_color','')}")
     c.setFont('Mono', 7); c.setFillColor(DARK); c.drawString(TC[1], DR_Y + 2.5*mm, sale.get('chassis_number',''))
-    c.setFont('Sans', 7.5); c.drawString(TC[2], DR_Y + 2.5*mm, sale.get('payment_mode','')); c.drawString(TC[3], DR_Y + 2.5*mm, 'Full Payment')
+    c.setFont('Sans', 7.5); c.drawString(TC[2], DR_Y + 2.5*mm, sale.get('payment_mode','')); c.drawString(TC[3], DR_Y + 2.5*mm, f"Adv. {RS}{int(sale['booking_advance']):,} recd" if sale.get('booking_advance') else 'Full Payment')
     total = sale.get('total_amount') or sale.get('sale_price') or 0
     total_str = f"{int(total):,}" if isinstance(total, (int, float)) else str(total)
     c.setFont('Sans-Bold', 10); c.setFillColor(GOLD); c.drawRightString(TC[4], DR_Y + 2.5*mm, f"{RS}{total_str}")
     c.setStrokeColor(GOLD); c.setLineWidth(0.7); c.line(ML, DR_Y - 2*mm, MR, DR_Y - 2*mm)
     TOT_Y = DR_Y - 12*mm
     c.setFont('Sans-Italic', 7); c.setFillColor(DIM); c.drawString(ML, TOT_Y + 4*mm, sale.get('amount_in_words',''))
+    if sale.get('booking_advance'):   # advance taken on a bike booking; the invoice total stays the full price
+        adv = float(sale['booking_advance'])
+        c.setFont('Sans-Bold', 7.5); c.setFillColor(DARK)
+        c.drawString(ML, TOT_Y - 0.5*mm, f"Advance received {RS}{int(adv):,} ({sale.get('booking_number','')})  ·  "
+                                         f"Balance payable {RS}{int(max(float(total or 0) - adv, 0)):,}")
     c.setFillColor(GOLD_LIGHT); c.setStrokeColor(GOLD); c.setLineWidth(0.6)
     c.roundRect(MR - 58*mm, TOT_Y - 1*mm, 58*mm, 11*mm, 1.5*mm, fill=1, stroke=1)
     c.setFont('Sans', 7); c.setFillColor(MID); c.drawString(MR - 55*mm, TOT_Y + 5.5*mm, 'TOTAL AMOUNT')
@@ -247,6 +252,11 @@ async def create_sale(body: SaleCreate, current_user=Depends(verify_token)):
         raise HTTPException(status_code=404, detail="Vehicle not found")
     if vehicle.get("status") == "sold":
         raise HTTPException(status_code=409, detail="Vehicle already sold")
+    booking = None
+    if body.booking_id:
+        booking = await db.vehicle_bookings.find_one({"_id": obj_id(body.booking_id)})
+        if not booking or booking.get("status") not in ("waiting", "arrived"):
+            raise HTTPException(status_code=409, detail="That bike booking is already closed or no longer exists")
     total_amount = body.total_amount if body.total_amount is not None else (body.sale_price or 0)
     inv_no    = await next_sequence("invoice")
     sale_date = body.sale_date or ist_now().strftime("%d %b %Y")
@@ -289,6 +299,9 @@ async def create_sale(body: SaleCreate, current_user=Depends(verify_token)):
         "milestone_dates": dict(body.milestone_dates or {}),
         "created_at":      utcnow().isoformat(),
     }
+    if booking:
+        doc.update({"booking_id": body.booking_id, "booking_number": booking.get("booking_number", ""),
+                    "booking_advance": float(booking.get("advance_amount") or 0)})
     # Fitting stock + sale + vehicle status go together, so a failure cannot leave
     # accessories deducted against a sale that was never written.
     inserted_id = None
@@ -308,6 +321,13 @@ async def create_sale(body: SaleCreate, current_user=Depends(verify_token)):
                 {"$set": {"status": "sold", "sold_date": sale_date, "invoice_number": inv_no}},
                 session=s,
             )
+            if booking:   # close the booking with the sale, or neither happens
+                await db.vehicle_bookings.update_one(
+                    {"_id": booking["_id"], "status": {"$in": ["waiting", "arrived"]}},
+                    {"$set": {"status": "delivered", "invoice_number": inv_no, "sale_id": str(inserted_id),
+                              "delivered_at": utcnow().isoformat()}},
+                    session=s,
+                )
         await session.with_transaction(_txn)
 
     doc["low_stock_alerts"] = await _priority_low_alerts(touched)
@@ -541,6 +561,12 @@ async def delete_sale(sale_id: str, current_user=Depends(require_admin)):
                                     session=s, reason="sale_fitting_delete")
             await db.vehicles.update_one({"_id": obj_id(sale["vehicle_id"])}, {"$set": {"status":"in_stock"}, "$unset": {"sold_date":"","invoice_number":""}}, session=s)
             await db.sales.delete_one({"_id": obj_id(sale_id)}, session=s)
+            if sale.get("booking_id"):   # the customer still has their advance with us
+                await db.vehicle_bookings.update_one(
+                    {"_id": obj_id(sale["booking_id"])},
+                    {"$set": {"status": "arrived"}, "$unset": {"invoice_number": "", "sale_id": "", "delivered_at": ""}},
+                    session=s,
+                )
         await session.with_transaction(_txn)
     await _sync_counter("invoice", "sales", "invoice_number")
     await _sheet_sync(sale, action="delete")   # drops the row; the sale is already gone

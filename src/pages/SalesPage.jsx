@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { salesApi, customersApi, vehiclesApi, partsApi, errMsg} from '../api/client';
+import { salesApi, customersApi, vehiclesApi, partsApi, vehicleBookingsApi, errMsg} from '../api/client';
 import { upiQrHtml } from '../utils/upi';
 import { Btn, GhostBtn, Field, Skeleton, Empty, ApiError, useSortable } from '../components/ui';
 import { notifyLowStock } from '../utils/lowStockToast';
@@ -209,6 +209,9 @@ function printSaleInvoice(rawSale) {
           <div class="total-val">${RS}${totalStr}</div>
         </div>
       </div>
+      ${rawSale.booking_advance ? `<div style="text-align:right;font-size:11px;margin:-8px 0 14px">
+        Advance received (${sale.booking_number}): <b>${RS}${fmt(rawSale.booking_advance)}</b> &nbsp;·&nbsp;
+        Balance payable: <b>${RS}${fmt(Math.max(total - rawSale.booking_advance, 0))}</b></div>` : ''}
 
       ${upiQrHtml({ note: `Invoice ${sale.invoice_number || ''}`.trim() })}
 
@@ -315,6 +318,7 @@ function InvoiceModal({ sale, onClose }) {
             ['Age',            sale.nominee?.age || '—'],
             ['Number',         sale.nominee?.number || '—'],
             ['Total Amount',   sale.total_amount ? `₹${sale.total_amount.toLocaleString('en-IN')}` : '—'],
+            ...(sale.booking_advance ? [['Booking advance', `₹${sale.booking_advance.toLocaleString('en-IN')} (${sale.booking_number}) · balance ₹${Math.max((sale.total_amount || 0) - sale.booking_advance, 0).toLocaleString('en-IN')}`]] : []),
             ['Payment Mode',   sale.payment_mode || '—'],
           ].map(([l,v]) => (
             <div key={l} className="record-row">
@@ -531,6 +535,24 @@ function SaleForm({ initial = {}, onSave, onCancel, saving }) {
   const isEdit = !!initial?.id;
   const draft  = useDraft({ key: 'mm_draft_sale', state: f, enabled: !isEdit });
 
+  // Bike bookings: a sale can close one, and its advance shows on the invoice as received
+  const { data: bkData } = useQuery({
+    queryKey: ['vehicle-bookings'],
+    queryFn: () => vehicleBookingsApi.list().then(r => r.data),
+    enabled: !isEdit,
+  });
+  const openBookings = (Array.isArray(bkData) ? bkData : []).filter(b => b.status === 'waiting' || b.status === 'arrived');
+  const linkedBooking = openBookings.find(b => b.id === f.booking_id);
+  const mobileBooking = !f.booking_id && openBookings.find(b => b.customer_mobile && b.customer_mobile === (f.customer_mobile || '').trim());
+  const linkBooking = b => {
+    setF(p => ({ ...p, booking_id: b.id,
+      customer_name:   p.customer_name   || b.customer_name,
+      customer_mobile: p.customer_mobile || b.customer_mobile }));
+    if (!f.vehicle_id) setVehSearch(b.model);   // vehicle search matches one field at a time
+    toast.success(`Booking ${b.booking_number} linked: pick the ${b.brand} ${b.model} on the Vehicle step`);
+  };
+  const bookingLabel = b => `${b.booking_number} · ${b.customer_name} · ${[b.brand, b.model, b.color].filter(Boolean).join(' ')} · advance ₹${Number(b.advance_amount || 0).toLocaleString('en-IN')}`;
+
   // The brand's standard fittings load as soon as the vehicle is picked, NOT when the
   // Fittings tab is opened — otherwise a sale saved without visiting that tab would
   // record no fittings and the stock would silently never come off.
@@ -594,6 +616,21 @@ function SaleForm({ initial = {}, onSave, onCancel, saving }) {
       {/* ── Step 1: Customer ── */}
       {step === 1 && (
         <div style={{ display:'flex', flexDirection:'column', gap: 12 }}>
+          {!isEdit && openBookings.length > 0 && (
+            <Field label="From a bike booking (optional)">
+              <select value={f.booking_id || ''} style={inpStyle}
+                onChange={e => { const b = openBookings.find(x => x.id === e.target.value); if (b) linkBooking(b); else setF(p => ({ ...p, booking_id: '' })); }}>
+                <option value="">— Not from a booking —</option>
+                {openBookings.map(b => <option key={b.id} value={b.id}>{bookingLabel(b)}</option>)}
+              </select>
+            </Field>
+          )}
+          {mobileBooking && (
+            <div className="notice notice-warn" role="status">
+              This customer has an open booking: {bookingLabel(mobileBooking)}.{' '}
+              <button type="button" className="link-btn" onClick={() => linkBooking(mobileBooking)}>Link it to this sale</button>
+            </div>
+          )}
           <Field label="Search Existing Customer (Optional)">
             <div style={{ position:'relative' }}>
               <input
@@ -732,6 +769,13 @@ function SaleForm({ initial = {}, onSave, onCancel, saving }) {
         <div className="form-grid-2col form-grid">
           <Field label="Sale Date"><input type="date" value={f.sale_date} onChange={s('sale_date')} style={inpStyle} /></Field>
           <Field label="Sale Price (₹)"><input type="number" value={f.sale_price} onChange={s('sale_price')} placeholder="0" style={inpStyle} /></Field>
+          {linkedBooking && (
+            <div className="field-note is-ok" role="status" style={{ gridColumn:'1 / -1' }}>
+              Advance already paid on {linkedBooking.booking_number}: ₹{Number(linkedBooking.advance_amount || 0).toLocaleString('en-IN')}
+              {f.sale_price ? ` · balance due ₹${Math.max((parseFloat(f.sale_price) || 0) - (linkedBooking.advance_amount || 0), 0).toLocaleString('en-IN')}` : ''}
+              . Saving this sale marks the booking delivered.
+            </div>
+          )}
           <Field label="Payment Mode">
             <select value={f.payment_mode} onChange={s('payment_mode')} style={inpStyle}>
               <option value="Cash">Cash</option>
@@ -848,6 +892,7 @@ const createMut = useMutation({
       qc.invalidateQueries(['sales']);
       qc.invalidateQueries(['sales-stats']);
       qc.invalidateQueries(['customers']); // Instantly refresh the customer dropdown
+      qc.invalidateQueries(['vehicle-bookings']);   // a linked booking is now delivered
       qc.invalidateQueries(['parts']);
       qc.invalidateQueries(['parts-stats']);
       setShowAdd(false);

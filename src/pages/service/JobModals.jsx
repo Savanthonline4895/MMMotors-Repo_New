@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useDraft, DraftBar } from '../../hooks/useDraft';
 import { ModalShell, ModalFoot } from './Modal';
 import { openWA, PROGRESS_MSG, C, inp, labelSt } from './shared';
+import CheckinCondition from './CheckinCondition';
 
 // Past job cards as vehicle rows in the same shape as sales rows, so bikes that were only
 // ever serviced here (bought elsewhere) can be picked too.
@@ -62,6 +63,9 @@ export function EditJobModal({ job, onClose }) {
     check_in_date:      job.check_in_date      || '',
     notes:              job.notes              || '',
     service_type:       job.service_type       || '',
+    checkin_photo_ids:  job.checkin_photo_ids  || [],
+    fuel_level:         job.fuel_level         || '',
+    damage_notes:       job.damage_notes       || '',
   });
   const upd = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
 
@@ -183,6 +187,7 @@ export function EditJobModal({ job, onClose }) {
           <label style={labelSt}>Notes</label>
           <input value={form.notes} onChange={upd('notes')} placeholder="Additional notes" style={inp} />
         </div>
+        <CheckinCondition value={form} onChange={patch => setForm(p => ({ ...p, ...patch }))} />
       </div>
       <ModalFoot>
         <button onClick={onClose} className="btn btn-ghost">Cancel</button>
@@ -208,6 +213,7 @@ export function NewJobModal({ onClose }) {
     vehicle_number:'', chassis_number:'', brand:'HERO', model:'', odometer_km:'',
     complaint:'', technician:'', estimated_delivery:'', notes:'',
     service_type:'Repair / Walk-in',
+    checkin_photo_ids:[], fuel_level:'', damage_notes:'',
   });
   const upd = k => e => setForm(p => ({ ...p, [k]:e.target.value }));
 
@@ -514,6 +520,7 @@ export function NewJobModal({ onClose }) {
             <label style={labelSt}>Notes</label>
             <input value={form.notes} onChange={upd('notes')} placeholder="Additional notes" style={inp} />
           </div>
+          <CheckinCondition value={form} onChange={patch => setForm(p => ({ ...p, ...patch }))} />
         </div>
       )}
       <ModalFoot>

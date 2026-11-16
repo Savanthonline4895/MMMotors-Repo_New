@@ -45,6 +45,18 @@ async def list_service_jobs(
     total = await db.service_jobs.count_documents(query)
     return JSONResponse(content=oids(docs), headers={"X-Total-Count": str(total)})
 
+def _photo_ids(ids) -> list:
+    """Check-in photo ids from the client: GridFS ObjectId strings only, de-duplicated, max 8."""
+    out = []
+    for x in ids or []:
+        x = str(x).strip()
+        if not re.fullmatch(r"[0-9a-f]{24}", x):
+            raise HTTPException(status_code=400, detail="Invalid photo id")
+        if x not in out:
+            out.append(x)
+    return out[:8]
+
+
 @api_router.post("/service", status_code=201)
 async def create_service_job(body: ServiceJobCreate, current_user=Depends(verify_token)):
     customer = await db.customers.find_one({"_id": obj_id(body.customer_id)})
@@ -76,6 +88,9 @@ async def create_service_job(body: ServiceJobCreate, current_user=Depends(verify
         "status":             "pending",
         "notes":              body.notes or "",
         "service_type":       body.service_type or "",
+        "checkin_photo_ids":  _photo_ids(body.checkin_photo_ids),
+        "fuel_level":         body.fuel_level or "",
+        "damage_notes":       (body.damage_notes or "").strip(),
         "created_at":         utcnow().isoformat(),
     }
     result = await db.service_jobs.insert_one(doc)
@@ -484,6 +499,8 @@ async def get_service_job(job_id: str, current_user=Depends(verify_token)):
 @api_router.put("/service/{job_id}")
 async def update_service_job(job_id: str, body: ServiceJobUpdate, current_user=Depends(verify_token)):
     update = {k: v for k, v in body.dict().items() if v is not None}
+    if "checkin_photo_ids" in update:
+        update["checkin_photo_ids"] = _photo_ids(update["checkin_photo_ids"])
     if "status" in update and update["status"] == "delivered":
         update.setdefault("delivery_date", ist_now().strftime("%d %b %Y"))
     await db.service_jobs.update_one({"_id": obj_id(job_id)}, {"$set": update})

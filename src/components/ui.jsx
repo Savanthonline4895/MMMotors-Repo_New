@@ -25,13 +25,21 @@ export function GhostBtn({ onClick, children, sm = false, style = {} }) {
   );
 }
 
-// Form field wrapper
-export function Field({ label, children }) {
-  return (
-    <div className="field">
+// Form field wrapper. A <label>, so the text names the input inside it for screen readers
+// and clicking it focuses the input. `group` is for several controls (swatches, a picker
+// with buttons): it names the group instead, since a label only names its first control.
+export function Field({ label, children, group = false }) {
+  if (group) return (
+    <div className="field" role="group" aria-label={typeof label === 'string' ? label.replace(/\s*\*$/, '') : undefined}>
       <span className="field-label">{label}</span>
       {children}
     </div>
+  );
+  return (
+    <label className="field">
+      <span className="field-label">{label}</span>
+      {children}
+    </label>
   );
 }
 
