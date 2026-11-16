@@ -27,7 +27,4 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      # shortcut: 9 lint errors already existed before this check was added, so lint
-      # reports without failing the run; drop continue-on-error once they are fixed.
       - run: npm run lint
-        continue-on-error: true
