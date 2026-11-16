@@ -13,6 +13,7 @@ const NAV = [
   { id: 'service',     label: 'Service',       roles: ['owner','service_advisor'], group: 'workshop' },
   { id: 'service-due', label: 'Service Due', roles: ['owner','service_advisor'], group: 'workshop' },
   { id: 'vehicles',  label: 'Vehicles',     roles: ['owner','sales'], group: 'sales' },
+  { id: 'bookings',  label: 'Bike Bookings', roles: ['owner','sales'], group: 'sales' },
   { id: 'parts',     label: 'Parts',        roles: ['owner','parts_counter'], group: 'parts' },
   { id: 'vendors',        label: 'Vendors',        roles: ['owner','parts_counter'], group: 'parts' },
   { id: 'purchase-bills', label: 'Purchase Bills', roles: ['owner','parts_counter'], group: 'parts' },

@@ -18,6 +18,7 @@ import SalesPage     from './pages/SalesPage';
 import VehiclesPage  from './pages/VehiclesPage';
 import CustomersPage from './pages/CustomersPage';
 import DebtPage      from './pages/DebtPage';
+import VehicleBookingsPage from './pages/VehicleBookingsPage';
 import ServiceDuePage from './pages/ServiceDuePage';
 import ExpensesPage          from './pages/ExpensesPage';
 import AccidentEstimatePage  from './pages/AccidentEstimatePage';
@@ -89,6 +90,7 @@ function AppLayout() {
               <Route path="/customers" element={<CustomersPage />} />
               <Route path="/followups" element={<FollowupsPage />} />
               <Route path="/debt"         element={<DebtPage />} />
+              <Route path="/bookings"     element={<VehicleBookingsPage />} />
               <Route path="/service-due"  element={<ServiceDuePage />} />
               <Route path="/expenses"     element={<ExpensesPage />} />
               <Route path="/accident-estimate" element={<AccidentEstimatePage />} />

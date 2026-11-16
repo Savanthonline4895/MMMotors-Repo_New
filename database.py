@@ -113,6 +113,7 @@ PAGE_ACCESS = {
     "files":               {"sales", "customers"},
     "import":              {"import"},
     "followups":           {"followups"},
+    "vehicle-bookings":    {"bookings", "sales"},
 }
 
 def page_access_allowed(path: str, allowed_pages) -> bool:
@@ -178,7 +179,7 @@ def require_roles(*roles):
     return checker
 
 # ── Sequential counters ─────────────────────────────────────────────────────────
-_PREFIX = {"invoice": ("INV", 6), "job": ("SRV", 6), "part_bill": ("PRT", 6), "part": ("PT", 6), "accident_estimate": ("EST", 4)}
+_PREFIX = {"invoice": ("INV", 6), "job": ("SRV", 6), "part_bill": ("PRT", 6), "part": ("PT", 6), "accident_estimate": ("EST", 4), "booking": ("BKG", 6)}
 
 async def next_sequence(name: str, session=None) -> str:
     prefix, pad = _PREFIX[name]
@@ -250,7 +251,7 @@ def audit_diff(before: dict, after: dict) -> dict:
     return out
 
 def audit_ref(doc: dict) -> str:
-    for k in ("bill_number", "invoice_number", "job_number", "part_number", "username", "name", "description"):
+    for k in ("bill_number", "invoice_number", "job_number", "booking_number", "part_number", "username", "name", "description"):
         if doc.get(k):
             return str(doc[k])
     return ""

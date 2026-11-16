@@ -171,6 +171,7 @@ _AUDIT_COLLECTIONS = {
     "sales": "sales", "service-bills": "service_bills", "parts-bills": "parts_bills",
     "parts": "spare_parts", "purchase-bills": "purchase_bills", "users": "users",
     "customers": "customers", "vehicles": "vehicles", "debts": "debts", "expenses": "expenses",
+    "vehicle-bookings": "vehicle_bookings",
 }
 _AUDIT_PATH = re.compile(r"^/api/(" + "|".join(_AUDIT_COLLECTIONS) + r")/([0-9a-f]{24})(?:/([\w-]+))?$")
 @app.middleware("http")
@@ -279,6 +280,8 @@ async def _ensure_indexes():
         "created_at", expireAfterSeconds=LOGIN_LOCKOUT_MIN * 60
     )
     await db.login_attempts.create_index("username")
+    await db.vehicle_bookings.create_index("booking_number", unique=True)
+    await db.vehicle_bookings.create_index("status")
     # change history — kept 2 years, then Mongo drops it (M0 has a 512 MB cap)
     await db.audit_log.create_index("at", expireAfterSeconds=2 * 365 * 24 * 3600)
     await db.audit_log.create_index([("entity_id", 1), ("at", -1)])
@@ -4029,6 +4032,14 @@ async def delete_parts_bill(bill_id: str, current_user=Depends(require_admin)):
 #  DASHBOARD STATS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+async def _bookings_ready() -> int:
+    """Waiting bike bookings whose model is now in stock — the customer should be called."""
+    waiting = await db.vehicle_bookings.find({"status": "waiting"}, {"brand": 1, "model": 1, "color": 1}).to_list(None)
+    if not waiting:
+        return 0
+    stock = await _in_stock_vehicles()
+    return sum(1 for b in waiting if booking_matches(b, stock))
+
 @api_router.get("/dashboard/stats")
 async def dashboard_stats(current_user=Depends(verify_token)):
     now = ist_now()
@@ -4063,6 +4074,7 @@ async def dashboard_stats(current_user=Depends(verify_token)):
         "service":   {"pending":jobs_pending,"in_progress":jobs_in_progress,"ready":jobs_ready,"active_total":jobs_pending+jobs_in_progress+jobs_ready},
         "customers": customers_total,
         "parts":     {"low_stock":parts_low,"out_of_stock":parts_out},
+        "bookings_ready": await _bookings_ready(),
         "revenue":   {"today":today_rev_r[0]["total"] if today_rev_r else 0,"month":month_rev_r[0]["total"] if month_rev_r else 0},
         "sales_today_count": sales_today_count,
     }
@@ -5842,7 +5854,8 @@ async def _build_backup_zip() -> tuple[bytes, str]:
 
     # ── Fetch all collections ──────────────────────────────────────────────────
     (
-        customers, vehicles, sales, service_jobs, parts, expenses, debts, staff
+        customers, vehicles, sales, service_jobs, parts, expenses, debts, staff,
+        service_bills, parts_bills, purchase_bills, vendors, bookings,
     ) = await asyncio.gather(
         db.customers.find({}).to_list(100000),
         db.vehicles.find({}).to_list(100000),
@@ -5852,6 +5865,11 @@ async def _build_backup_zip() -> tuple[bytes, str]:
         db.expenses.find({}).to_list(100000),
         db.debts.find({}).to_list(100000),
         db.users.find({}, {"password": 0}).to_list(1000),
+        db.service_bills.find({}).to_list(100000),
+        db.parts_bills.find({}).to_list(100000),
+        db.purchase_bills.find({}).to_list(100000),
+        db.vendors.find({}).to_list(100000),
+        db.vehicle_bookings.find({}).to_list(100000),
     )
 
     # Convert ObjectIds to strings
@@ -5895,6 +5913,12 @@ async def _build_backup_zip() -> tuple[bytes, str]:
         (f"spare_parts_{today}.xlsx",  make_workbook(parts_c,     ['part_number','name','category','brand','compatible_with','stock','reorder_level','purchase_price','selling_price','gst_rate','hsn_code','location','created_at'], 'Parts')),
         (f"expenses_{today}.xlsx",     make_workbook(expenses_c,  ['date','category','sub_category','amount','description','vendor','payment_mode','receipt_no','notes','created_by','created_at'], 'Expenses')),
         (f"debts_{today}.xlsx",        make_workbook(debts_c,     ['customer_name','customer_mobile','amount','paid','balance','description','due_date','status','source','created_at'], 'Debts')),
+        # Bills keep their line items as text in the "items" column
+        (f"service_bills_{today}.xlsx", make_workbook(clean(service_bills), ['bill_number','bill_date','job_number','customer_name','customer_mobile','customer_gstin','vehicle_number','items','labour_charges','subtotal','gst_total','discount','net_total','payment_mode','notes','created_at'], 'Service Bills')),
+        (f"parts_bills_{today}.xlsx",   make_workbook(clean(parts_bills),   ['bill_number','bill_date','customer_name','customer_mobile','customer_vehicle','items','subtotal','gst_total','discount','net_total','grand_total','payment_mode','created_at'], 'Parts Bills')),
+        (f"purchase_bills_{today}.xlsx", make_workbook(clean(purchase_bills), ['bill_number','bill_date','vendor_name','vendor_gstin','items','subtotal','total_cgst','total_sgst','round_off','grand_total','notes','created_at'], 'Purchase Bills')),
+        (f"vendors_{today}.xlsx",       make_workbook(clean(vendors),       ['name','gstin','phone','email','address','notes','created_at'], 'Vendors')),
+        (f"vehicle_bookings_{today}.xlsx", make_workbook(clean(bookings),   ['booking_number','booking_date','customer_name','customer_mobile','brand','model','variant','color','advance_amount','payment_mode','expected_date','status','invoice_number','refund_amount','cancel_reason','notes','created_at'], 'Bike Bookings')),
         (f"staff_{today}.xlsx",        make_workbook(staff_c,     ['name','username','mobile','email','role','salary','join_date','status','allowed_pages','created_at'], 'Staff')),
     ]
 
@@ -6421,6 +6445,116 @@ async def create_booking(body: BookingIn, request: Request):
     await db.service_jobs.update_one({"_id": obj_id(job["id"])}, {"$set": {"source": "online", "booked_for": body.date}})
     _booking_hits[ip] = recent + [now]
     return {"job_number": job["job_number"], "date": body.date}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  VEHICLE BOOKINGS — advance paid for a new bike not yet in stock; waiting list
+# ═══════════════════════════════════════════════════════════════════════════════
+VEHICLE_BOOKING_STATUSES = ("waiting", "arrived", "delivered", "cancelled")
+
+class VehicleBookingCreate(BaseModel):
+    customer_name:   str = Field(..., min_length=1, max_length=120)
+    customer_mobile: str = Field(..., pattern=r"^\d{10}$")
+    customer_id:     Optional[str] = ""
+    brand:           str = Field(..., min_length=1, max_length=40)
+    model:           str = Field(..., min_length=1, max_length=80)
+    variant:         Optional[str] = Field("", max_length=80)
+    color:           Optional[str] = Field("", max_length=40)
+    advance_amount:  float = Field(..., ge=0, le=10_000_000)
+    payment_mode:    Optional[str] = "Cash"
+    expected_date:   Optional[str] = Field("", pattern=r"^(\d{4}-\d{2}-\d{2})?$")
+    notes:           Optional[str] = Field("", max_length=1000)
+
+class VehicleBookingUpdate(BaseModel):
+    customer_name:   Optional[str] = Field(None, min_length=1, max_length=120)
+    customer_mobile: Optional[str] = Field(None, pattern=r"^\d{10}$")
+    brand:           Optional[str] = Field(None, min_length=1, max_length=40)
+    model:           Optional[str] = Field(None, min_length=1, max_length=80)
+    variant:         Optional[str] = Field(None, max_length=80)
+    color:           Optional[str] = Field(None, max_length=40)
+    advance_amount:  Optional[float] = Field(None, ge=0, le=10_000_000)
+    payment_mode:    Optional[str] = None
+    expected_date:   Optional[str] = Field(None, pattern=r"^(\d{4}-\d{2}-\d{2})?$")
+    notes:           Optional[str] = Field(None, max_length=1000)
+    status:          Optional[str] = None
+    invoice_number:  Optional[str] = Field(None, max_length=40)    # when delivered
+    refund_amount:   Optional[float] = Field(None, ge=0, le=10_000_000)  # when cancelled
+    cancel_reason:   Optional[str] = Field(None, max_length=300)
+
+def _bk_key(s) -> str:
+    return " ".join(str(s or "").upper().split())
+
+def booking_matches(booking: dict, stock: list) -> int:
+    """In-stock vehicles that fit this booking: same brand and model, and the same colour
+    when the customer asked for one. Variant is ignored — staff confirm it on the phone."""
+    want = (_bk_key(booking.get("brand")), _bk_key(booking.get("model")), _bk_key(booking.get("color")))
+    return sum(1 for v in stock
+               if (_bk_key(v.get("brand")), _bk_key(v.get("model"))) == want[:2]
+               and (not want[2] or _bk_key(v.get("color")) == want[2]))
+
+async def _in_stock_vehicles() -> list:
+    return await db.vehicles.find({"status": "in_stock"}, {"brand": 1, "model": 1, "color": 1}).to_list(None)
+
+@api_router.get("/vehicle-bookings")
+async def list_vehicle_bookings(
+    status: Optional[str] = Query(None),
+    search: Optional[str] = Query(None, max_length=60),
+    current_user=Depends(verify_token),
+):
+    q: dict = {}
+    if status in VEHICLE_BOOKING_STATUSES:
+        q["status"] = status
+    if search:
+        esc = re.escape(search.strip())
+        q["$or"] = [{f: {"$regex": esc, "$options": "i"}}
+                    for f in ("booking_number", "customer_name", "customer_mobile", "model", "brand")]
+    docs  = await db.vehicle_bookings.find(q).sort("created_at", -1).to_list(2000)
+    stock = await _in_stock_vehicles()
+    for d in docs:
+        d["in_stock_matches"] = booking_matches(d, stock) if d.get("status") in ("waiting", "arrived") else 0
+    return oids(docs)
+
+@api_router.post("/vehicle-bookings", status_code=201)
+async def create_vehicle_booking(body: VehicleBookingCreate, current_user=Depends(verify_token)):
+    doc = {
+        **body.dict(),
+        "booking_number": await next_sequence("booking"),
+        "brand":          norm_brand(body.brand),
+        "customer_name":  body.customer_name.strip(),
+        "status":         "waiting",
+        "booking_date":   ist_now().strftime("%Y-%m-%d"),
+        "created_by":     current_user.get("name", "") or current_user.get("username", ""),
+        "created_at":     utcnow().isoformat(),
+    }
+    res = await db.vehicle_bookings.insert_one(doc)
+    doc["id"] = str(res.inserted_id); doc.pop("_id", None)
+    return doc
+
+@api_router.put("/vehicle-bookings/{booking_id}")
+async def update_vehicle_booking(booking_id: str, body: VehicleBookingUpdate, current_user=Depends(verify_token)):
+    booking = await db.vehicle_bookings.find_one({"_id": obj_id(booking_id)})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    update = {k: v for k, v in body.dict().items() if v is not None}
+    if "status" in update and update["status"] not in VEHICLE_BOOKING_STATUSES:
+        raise HTTPException(status_code=400, detail="Unknown booking status")
+    if update.get("status") == "delivered" and not (update.get("invoice_number") or booking.get("invoice_number")):
+        raise HTTPException(status_code=400, detail="Enter the sale invoice number to mark it delivered")
+    if "brand" in update:
+        update["brand"] = norm_brand(update["brand"])
+    if update.get("refund_amount", 0) > (update.get("advance_amount") or booking.get("advance_amount", 0)):
+        raise HTTPException(status_code=400, detail="Refund can't be more than the advance paid")
+    if "status" in update and update["status"] != booking.get("status"):
+        update[f"{update['status']}_at"] = utcnow().isoformat()
+    await db.vehicle_bookings.update_one({"_id": booking["_id"]}, {"$set": update})
+    return oid(await db.vehicle_bookings.find_one({"_id": booking["_id"]}))
+
+@api_router.delete("/vehicle-bookings/{booking_id}")
+async def delete_vehicle_booking(booking_id: str, current_user=Depends(require_admin)):
+    res = await db.vehicle_bookings.delete_one({"_id": obj_id(booking_id)})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    return {"message": "Deleted"}
+
 
 app.include_router(api_router)
 app.include_router(import_router)

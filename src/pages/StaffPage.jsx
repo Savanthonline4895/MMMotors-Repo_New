@@ -12,6 +12,7 @@ const ALL_PAGES = [
   { id:'service',     label:'Service',        desc:'Job cards, billing, service board' },
   { id:'service-due', label:'Service Due',    desc:'Overdue service reminders & WhatsApp' },
   { id:'vehicles',    label:'Vehicles',       desc:'Stock inventory, inbound/outbound' },
+  { id:'bookings',    label:'Bike Bookings',  desc:'Advance bookings for new bikes, waiting list' },
   { id:'parts',       label:'Parts',          desc:'Spare parts inventory & parts billing' },
   { id:'customers',   label:'Customers',      desc:'Customer records, history, tags' },
   { id:'followups',   label:'Follow-ups',     desc:'Enquiries, insurance renewals, birthday & festival WhatsApp' },

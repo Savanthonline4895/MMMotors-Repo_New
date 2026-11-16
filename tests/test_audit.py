@@ -29,6 +29,7 @@ def test_diff_of_identical_docs_is_empty():
 def test_ref_prefers_bill_number():
     assert audit_ref({"name": "Oil", "bill_number": "PRT-000012"}) == "PRT-000012"
     assert audit_ref({"username": "ravi"}) == "ravi"
+    assert audit_ref({"booking_number": "BKG-000001", "customer_name": "x"}) == "BKG-000001"
     assert audit_ref({}) == ""
 
 

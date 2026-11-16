@@ -14,7 +14,7 @@ export default function Topbar({ active, onMenuToggle }) {
     vehicles: 'Vehicles', parts: 'Parts', customers: 'Customers',
     reports: 'Reports', staff: 'Staff', import: 'Import data',
     vendors: 'Vendors', 'purchase-bills': 'Purchase Bills',
-    debt: 'Debt Ledger', 'service-due': 'Service Due',
+    debt: 'Debt Ledger', 'service-due': 'Service Due', bookings: 'Bike Bookings',
     expenses: 'Expenses', 'accident-estimate': 'Accident Estimate',
     'badge-types': 'Badge Types', followups: 'Follow-ups',
   };
