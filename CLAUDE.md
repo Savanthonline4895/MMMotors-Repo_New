@@ -56,6 +56,7 @@ Motorcycle dealership management system. React + Vite frontend. FastAPI + MongoD
     │   └── useBadges.jsx # Customer badge types + mobile→badges lookup + <CustomerBadges> chip renderer
     ├── utils/
     │   ├── date.js            # todayYmd() — local calendar date (never toISOString for "today")
+    │   ├── compressImage.js   # phone photo → ≤1280px JPEG before upload (Atlas 512 MB cap)
     │   └── escapeHtml.js · lowStockToast.js · upi.js
     ├── components/
     │   ├── Sidebar.jsx        # Filters NAV by user.allowed_pages
@@ -75,6 +76,7 @@ Motorcycle dealership management system. React + Vite frontend. FastAPI + MongoD
         │   ├── JobModals.jsx       # NewJobModal, EditJobModal, complaint picks
         │   ├── ServiceBillModal.jsx # bill modal, BillRow, StockShortageModal, printBill
         │   ├── FeedbackModal.jsx   # delivered → instant smiley feedback (full screen) or WhatsApp link
+        │   ├── CheckinCondition.jsx # check-in photos (compressed), fuel level, damage notes
         │   ├── Modal.jsx           # ModalShell, ModalFoot
         │   └── shared.jsx          # style tokens C, openWA, PROGRESS_MSG
         ├── ServiceDuePage.jsx
@@ -217,7 +219,7 @@ All routes on `api_router` are under `/api`. Import routes under `/api/import`.
 | Auth             | `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`                  |
 | Users/Staff      | CRUD `/users`, `/users/{id}/password` (all admin-only)                    |
 | Customers        | CRUD `/customers`, `/customers/{id}/timeline`, `PUT /customers/{id}/tags` (admin — replaces badge list), `GET /customer-badges-map` (mobile → [badges] for all customers) |
-| Vehicles         | CRUD `/vehicles`, `/vehicles/stats/summary`                               |
+| Vehicles         | CRUD `/vehicles`, `/vehicles/stats/summary`, `/vehicles/stock-age` (in-stock bikes by days waiting; registered before `/vehicles/{veh_id}`) |
 | Sales            | CRUD `/sales`, `/sales/stats/summary`, `POST /sales/{id}/fittings-fitted` (clears the pending-fitting marker), `PATCH /sales/{id}/milestone` (accepts `{key, value, date?}` — date recorded when value=true, cleared when false), `GET /sales/{id}/pdf` |
 | Service Jobs     | CRUD `/service`, `/service/due`, `/service/stats`, `/service/schedule/{vehicle_number}`, `POST /service/{id}/feedback-link` |
 | Feedback         | `GET/POST /feedback/{token}` — **public**, one rating per token (customer link and the in-shop smiley both post here) |
@@ -398,6 +400,18 @@ A printed QR (`public/sales-review-qr.png` / `.svg`, high error correction) open
 
 ### Bike bookings (16 Nov 2026)
 `routes/vehicle_bookings.py` + `VehicleBookingsPage.jsx` (/bookings, page id `bookings`, PAGE_ACCESS `vehicle-bookings` → bookings/sales). A customer pays an advance for a bike that isn't in stock; the list computes `in_stock_matches` with `booking_matches()` — same brand **and** model (whitespace/case-insensitive), plus colour only when the customer asked for one; variant is ignored on purpose. Dashboard stats return `bookings_ready` (waiting bookings with a match) → "Booking" alert. Statuses: waiting → arrived ("Bike arrived" sends WhatsApp and sets arrived) → delivered (requires the sale `invoice_number`) or cancelled (`refund_amount` ≤ advance). Saving prints an advance receipt (escapeDeep). Edits are in change history (`audit_ref` knows `booking_number`). Not linked to `create_sale` — the advance is adjusted by hand on the invoice. Pinned by `tests/test_vehicle_bookings.py`.
+
+### Booking → sale (16 Nov 2026)
+`SaleCreate.booking_id` closes a bike booking with the sale: `create_sale` checks the booking is waiting/arrived (409 otherwise, nothing saved), stores `booking_id` / `booking_number` / `booking_advance` on the sale, and sets the booking delivered (+ `invoice_number`, `sale_id`) **in the same transaction**. `delete_sale` reopens it (status arrived). The invoice total is unchanged (GSTR-1 back-calculates from it); the advance and balance are shown on the sale record, the HTML invoice and the PDF. New Sale form: "From a bike booking" picker on step 1, and a banner when the typed mobile matches an open booking; linking pre-fills the customer and the vehicle search (model only — vehicle search matches one field at a time).
+
+### Check-in condition (16 Nov 2026)
+Job cards carry `checkin_photo_ids` (≤ 8 GridFS ids, validated 24-hex and de-duplicated by `_photo_ids`), `fuel_level` (Reserve, 1/4, 1/2, 3/4, Full) and `damage_notes` (≤ 500). `CheckinCondition.jsx` sits in both job modals; photos open the phone camera (`capture="environment"`) and are shrunk by `compressImage()` to ≤ 1280 px JPEG before upload — full-size phone photos would fill Atlas M0 within a few dozen jobs. `PAGE_ACCESS` `upload`/`files` now include `service`.
+
+### Unsold stock age (16 Nov 2026)
+`stock_age_report()` (routes/vehicles.py, pure) buckets in-stock bikes into 0–30 / 31–60 / 61–90 / 90+ days from `inbound_date` (any app date format, via `_parse_any_date`) or, failing that, `created_at`; money tied up = `purchase_price`. Reports → "Unsold stock age" shows buckets, a per-brand table and the 30 longest-waiting bikes.
+
+### Form labels
+`Field` (components/ui.jsx) renders a `<label>`, so its text names the input inside (screen readers, click-to-focus). Pass `group` when it wraps several controls (it then names a `role="group"`). The service job modals still use sibling `<label style={labelSt}>` without `htmlFor` — not yet associated.
 
 ### Security
 - No `eval` / `exec` / `pickle` / `yaml.unsafe_load`. No `shell=True`. API keys from env vars only.
@@ -739,3 +753,12 @@ Verified: 24 pytest tests pass (real FastAPI + mongomock), `npm run build` passe
 5. **server.py split** into `routes/` + `common.py` / `models.py` / `routers.py`; all 155 routes kept, and the 7 pairs of routes that could match the same URL keep their order; 345 of 350 blocks moved byte-for-byte (the 5 others: import lines, lifespan db wiring, sale-PDF logo path now resolved from the repo root).
 
 Verified: 32 tests (incl. real lifespan startup), lint, build; Bike Bookings clicked through in a browser against a local in-memory backend (create, in-stock badge, receipt, WhatsApp, delivered, change history). Not verified: anything on Render/Atlas; the Google Sales sheet's sharing setting (needs the owner's Google account).
+
+## Changes (16 Nov 2026, second batch)
+
+1. **Booking → sale** link with advance and balance on the record, invoice and PDF; delete reopens the booking.
+2. **Form labels**: `Field` is a real `<label>` (165 uses); `group` for the two multi-control fields.
+3. **Check-in photos**, fuel level and damage notes on job cards, compressed client-side; service staff can upload.
+4. **Unsold stock age** report on Reports.
+
+Verified: 41 tests (incl. sale-PDF generation with fallback fonts, booking close/reopen, photo-id validation, stock-age buckets and route order), lint 0, build; all four flows clicked through in a browser against a local in-memory backend (booking → sale → invoice line; photo shrunk 152 KB → 13 KB and shown in Edit; stock-age buckets incl. a "05 Jul 2026" date). Not verified on Render/Atlas, or on a real phone camera.

@@ -109,8 +109,8 @@ PAGE_ACCESS = {
     "debts":               {"debt"},
     "expenses":            {"expenses"},
     "accident-estimates":  {"accident-estimate"},
-    "upload":              {"sales", "customers"},
-    "files":               {"sales", "customers"},
+    "upload":              {"sales", "customers", "service"},   # service: check-in photos
+    "files":               {"sales", "customers", "service"},
     "import":              {"import"},
     "followups":           {"followups"},
     "vehicle-bookings":    {"bookings", "sales"},

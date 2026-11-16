@@ -157,6 +157,7 @@ class SaleCreate(BaseModel):
     milestones:        Optional[Dict[str, bool]] = None
     milestone_dates:   Optional[Dict[str, str]]  = None
     fittings:          Optional[List[SaleFitting]] = None
+    booking_id:        Optional[str]   = ""   # bike booking this sale closes; its advance is shown as received
 
 class SaleUpdate(BaseModel):
     status:            Optional[str]   = None
@@ -201,6 +202,8 @@ class MilestoneUpdate(BaseModel):
     date:  Optional[str] = None   # YYYY-MM-DD; required-ish when value=True (defaults to today)
 
 # ── Service Jobs ──────────────────────────────────────────────────────────────
+FUEL_LEVEL_RE = r"^(|Reserve|1/4|1/2|3/4|Full)$"
+
 class ServiceJobCreate(BaseModel):
     customer_id:    str
     vehicle_number: str
@@ -217,6 +220,10 @@ class ServiceJobCreate(BaseModel):
     notes:          Optional[str] = ""
     vehicle_photo_id: Optional[str] = ""
     save_vehicle:   Optional[bool] = False
+    # Check-in condition: photos (GridFS ids), fuel level, existing damage
+    checkin_photo_ids: Optional[List[str]] = Field([], max_length=8)
+    fuel_level:     Optional[str] = Field("", pattern=FUEL_LEVEL_RE)
+    damage_notes:   Optional[str] = Field("", max_length=500)
     service_type:   Optional[str] = ""   # "Repair / Walk-in" or "1st Service" … "6th+ Service"
 
 class FeedbackSubmit(BaseModel):
@@ -237,6 +244,9 @@ class ServiceJobUpdate(BaseModel):
     odometer_km:        Optional[int] = None
     odometer_out:       Optional[int] = None
     vehicle_photo_id:   Optional[str] = None
+    checkin_photo_ids:  Optional[List[str]] = Field(None, max_length=8)
+    fuel_level:         Optional[str] = Field(None, pattern=FUEL_LEVEL_RE)
+    damage_notes:       Optional[str] = Field(None, max_length=500)
     check_in_date:      Optional[str] = None
     created_at:         Optional[str] = None   # correcting imported service dates
     customer_name:      Optional[str] = None

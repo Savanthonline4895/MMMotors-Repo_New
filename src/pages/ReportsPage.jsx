@@ -48,6 +48,64 @@ function Section({ title, sub, children, loading, error, action, inGrid }) {
   );
 }
 
+// ── Unsold stock age ─────────────────────────────────────────────────
+// Bikes waiting in stock, by how long. Money in slow stock is the case for an early discount.
+const AGE_KEYS = ['0-30', '31-60', '61-90', '90+'];
+const AGE_TONE = { '61-90': 'var(--color-warn)', '90+': 'var(--color-error)' };
+function StockAgeSection() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['vehicle-stock-age'],
+    queryFn: () => vehiclesApi.stockAge().then(r => r.data),
+  });
+  const rupees = n => `₹${Math.round(n || 0).toLocaleString('en-IN')}`;
+  return (
+    <Section title="Unsold stock age" sub="In-stock bikes by days since they arrived (or were added)" loading={isLoading} error={error}>
+      {!data?.total ? <Empty message="No bikes in stock" /> : (<>
+        <div className="stat-strip" style={{ marginBottom:'var(--space-md)' }}>
+          {AGE_KEYS.map(k => (
+            <div key={k} className="stat">
+              <span className="stat-label">{k} days</span>
+              <span className="stat-value" style={{ color: data.buckets[k].count ? AGE_TONE[k] : undefined }}>{data.buckets[k].count}</span>
+              <span className="cell-sub">{rupees(data.buckets[k].value)} tied up</span>
+            </div>
+          ))}
+        </div>
+        <div className="table-wrap">
+          <table className="data-table">
+            <caption className="visually-hidden">In-stock bikes per brand by age</caption>
+            <thead><tr><th scope="col">Brand</th>{AGE_KEYS.map(k => <th key={k} scope="col" className="num">{k} d</th>)}</tr></thead>
+            <tbody>
+              {data.by_brand.map(b => (
+                <tr key={b.brand}><td className="cell-strong">{b.brand}</td>
+                  {AGE_KEYS.map(k => <td key={k} className="num" style={{ color: b[k] ? AGE_TONE[k] : 'var(--color-muted)' }}>{b[k] || '—'}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <h3 className="label-xs" style={{ margin:'var(--space-lg) 0 var(--space-xs)' }}>Longest waiting</h3>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead><tr><th scope="col">Bike</th><th scope="col">Chassis</th><th scope="col">In stock since</th><th scope="col" className="num">Days</th><th scope="col" className="num">Purchase</th></tr></thead>
+            <tbody>
+              {data.oldest.map(v => (
+                <tr key={v.id}>
+                  <td>{[v.brand, v.model, v.variant, v.color].filter(Boolean).join(' ')}</td>
+                  <td className="mono cell-id">{v.chassis_number || '—'}</td>
+                  <td className="cell-muted">{v.since}{v.dated_from === 'added' && <span title="No inbound date; using the day it was added"> *</span>}</td>
+                  <td className="num cell-strong" style={{ color: AGE_TONE[AGE_KEYS.find(k => v.days <= ({ '0-30':30,'31-60':60,'61-90':90 }[k] ?? Infinity))] }}>{v.days}</td>
+                  <td className="num">{v.purchase_price ? rupees(v.purchase_price) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {data.oldest.some(v => v.dated_from === 'added') && <p className="label-xs" style={{ marginTop:'var(--space-xs)' }}>* No inbound date recorded — counted from the day the bike was added to the app.</p>}
+      </>)}
+    </Section>
+  );
+}
+
 // ── Stat ─────────────────────────────────────────────────────────────
 function StatPill({ label, value, sub }) {
   return (
@@ -638,6 +696,8 @@ export default function ReportsPage() {
           </div>
         )}
       </Section>
+
+      <StockAgeSection />
 
       <TopModelsSection />
 

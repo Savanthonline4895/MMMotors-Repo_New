@@ -100,6 +100,7 @@ export const vehiclesApi = {
   update: (id, d)  => api.put(`/vehicles/${id}`, d),
   delete: (id)     => api.delete(`/vehicles/${id}`),
   stats:  (params) => api.get('/vehicles/stats/summary', { params }),
+  stockAge: ()     => api.get('/vehicles/stock-age'),
 };
 
 // ── Sales ───────────────────────────────────────────────────────────

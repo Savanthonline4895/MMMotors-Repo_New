@@ -45,7 +45,7 @@ function BadgeForm({ initial, onSave, onCancel, saving }) {
               autoFocus
             />
           </Field>
-          <Field label="Colour">
+          <Field label="Colour" group>
             <div role="group" aria-label="Badge colour" style={{ display:'flex', flexWrap:'wrap', gap:'var(--space-xs)', marginTop:'var(--space-3xs)' }}>
               {PRESET_COLORS.map(c => (
                 <button
