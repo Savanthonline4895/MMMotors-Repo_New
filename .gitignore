@@ -1,0 +1,14 @@
+# dependencies and build output
+node_modules/
+dist/
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+# secrets — never commit
+.env
+.env.*
+# local tooling
+graphify-out/
+.claude/

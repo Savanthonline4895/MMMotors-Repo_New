@@ -376,6 +376,13 @@ Marking a job **Delivered** (status dropdown) or clicking **Feedback** on a deli
 
 The token comes from the job (`update_service_job` issues it on delivered) or `POST /service/{id}/feedback-link`. Pinned by `tests/test_feedback.py`.
 
+### Google reviews from sales customers (14 Nov 2026)
+A printed QR (`public/sales-review-qr.png` / `.svg`, high error correction) opens the public page `/review` (`ReviewPage.jsx`, listed with `/book` and `/feedback/` in App.jsx's public routes). The customer taps 1–5 stars and, optionally, the bike they bought; `src/utils/reviewDraft.js` writes a purchase-experience draft for that star count (several wordings per tier; `variant` keeps the wording stable while the bike name is typed, and typing in the review stops auto-rewrites). **Copy & post on Google** copies it and opens `GOOGLE_REVIEW_URL` (place ID `ChIJd_Mt4MPjrTsRLmE9ia2rZbA`, verified to open M.M. Motors, Malur), where they tap the same stars and paste.
+- Stars are picked on our page because Google's review page cannot be pre-filled.
+- Frontend-only: nothing is stored and no API call is made.
+- Deliberately **not** linked to the Service page or its feedback flow (owner's call).
+- Google rules: the review is posted from the customer's own account, and the button shows for every rating — offering it only to happy customers is review gating.
+
 ### Security
 - No `eval` / `exec` / `pickle` / `yaml.unsafe_load`. No `shell=True`. API keys from env vars only.
 - No f-strings in DB queries — parameterized only.

@@ -1,0 +1,33 @@
+# Runs on every push and pull request. Green = tests pass and the frontend builds.
+name: checks
+
+on: [push, pull_request]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"   # same as Render
+          cache: pip
+      - run: pip install -r requirements.txt pytest mongomock-motor httpx
+      - run: pytest tests -q
+        env:
+          JWT_SECRET_KEY: ci-only-not-a-secret
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # shortcut: 9 lint errors already existed before this check was added, so lint
+      # reports without failing the run; drop continue-on-error once they are fixed.
+      - run: npm run lint
+        continue-on-error: true
