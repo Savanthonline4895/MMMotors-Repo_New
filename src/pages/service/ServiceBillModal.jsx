@@ -493,8 +493,8 @@ export function ServiceBillModal({ job, onClose }) {
             </div>
           </div>
           <div style={{ marginBottom:20 }}>
-            <label style={labelSt}>Payment mode</label>
-            <select value={payMode} onChange={e => setPayMode(e.target.value)} style={{ ...inp, maxWidth:200 }}>
+            <label style={labelSt} htmlFor="sb-payment-mode">Payment mode</label>
+            <select id="sb-payment-mode" value={payMode} onChange={e => setPayMode(e.target.value)} style={{ ...inp, maxWidth:200 }}>
               {['Cash','UPI','Card','Bank Transfer','Credit'].map(m => <option key={m}>{m}</option>)}
             </select>
           </div>

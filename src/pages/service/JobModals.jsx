@@ -100,51 +100,51 @@ export function EditJobModal({ job, onClose }) {
         <div style={{ fontSize:10, fontWeight:700, color:C.muted, marginBottom:10 }}>Vehicle Details</div>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
           <div>
-            <label style={labelSt}>Vehicle Number</label>
-            <input value={form.vehicle_number} onChange={upd('vehicle_number')} placeholder="KA 07 U 3915" style={inp} />
+            <label style={labelSt} htmlFor="ej-vehicle-number">Vehicle Number</label>
+            <input id="ej-vehicle-number" value={form.vehicle_number} onChange={upd('vehicle_number')} placeholder="KA 07 U 3915" style={inp} />
           </div>
           <div>
-            <label style={labelSt}>Chassis Number</label>
-            <input value={form.chassis_number} onChange={upd('chassis_number')} placeholder="MBLHA10AT8HF12345" style={inp} />
+            <label style={labelSt} htmlFor="ej-chassis-number">Chassis Number</label>
+            <input id="ej-chassis-number" value={form.chassis_number} onChange={upd('chassis_number')} placeholder="MBLHA10AT8HF12345" style={inp} />
           </div>
           <div>
-            <label style={labelSt}>Brand</label>
-            <select value={form.brand} onChange={upd('brand')} style={inp}>
+            <label style={labelSt} htmlFor="ej-brand">Brand</label>
+            <select id="ej-brand" value={form.brand} onChange={upd('brand')} style={inp}>
               {BRANDS.map(b => <option key={b}>{b}</option>)}
             </select>
           </div>
           <div>
-            <label style={labelSt}>Model</label>
-            <input value={form.model} onChange={upd('model')} placeholder="Splendor Plus" style={inp} />
+            <label style={labelSt} htmlFor="ej-model">Model</label>
+            <input id="ej-model" value={form.model} onChange={upd('model')} placeholder="Splendor Plus" style={inp} />
           </div>
           <div>
-            <label style={labelSt}>Odometer (km)</label>
-            <input type="number" value={form.odometer_km} onChange={upd('odometer_km')} placeholder="12500" style={inp} />
+            <label style={labelSt} htmlFor="ej-odometer-km">Odometer (km)</label>
+            <input id="ej-odometer-km" type="number" value={form.odometer_km} onChange={upd('odometer_km')} placeholder="12500" style={inp} />
           </div>
         </div>
         {/* Service section */}
         <div style={{ fontSize:10, fontWeight:700, color:C.muted, marginBottom:10 }}>Service Details</div>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
           <div>
-            <label style={labelSt}>Technician</label>
-            <input value={form.technician} onChange={upd('technician')} placeholder="Technician name" style={inp} />
+            <label style={labelSt} htmlFor="ej-technician">Technician</label>
+            <input id="ej-technician" value={form.technician} onChange={upd('technician')} placeholder="Technician name" style={inp} />
           </div>
           <div>
-            <label style={labelSt}>Status</label>
-            <select value={form.status} onChange={upd('status')} style={inp}>
+            <label style={labelSt} htmlFor="ej-status">Status</label>
+            <select id="ej-status" value={form.status} onChange={upd('status')} style={inp}>
               {STATUSES.map(s => (
                 <option key={s} value={s}>{s.replace('_',' ').replace(/\b\w/g,c=>c.toUpperCase())}</option>
               ))}
             </select>
           </div>
           <div>
-            <label style={labelSt}>Est. Delivery</label>
-            <input type="date" value={form.estimated_delivery} onChange={upd('estimated_delivery')} style={inp} />
+            <label style={labelSt} htmlFor="ej-est-delivery">Est. Delivery</label>
+            <input id="ej-est-delivery" type="date" value={form.estimated_delivery} onChange={upd('estimated_delivery')} style={inp} />
           </div>
           <div>
-            <label style={labelSt}>Check-in Date</label>
+            <label style={labelSt} htmlFor="ej-check-in-date">Check-in Date</label>
             <div style={{ position:'relative' }}>
-              <input
+              <input id="ej-check-in-date"
                 type="date"
                 value={form.check_in_date}
                 onChange={upd('check_in_date')}
@@ -153,9 +153,9 @@ export function EditJobModal({ job, onClose }) {
             </div>
           </div>
           <div>
-            <label style={labelSt}>Created Date</label>
+            <label style={labelSt} htmlFor="ej-created-date">Created Date</label>
             <div style={{ position:'relative' }}>
-              <input
+              <input id="ej-created-date"
                 type="date"
                 value={form.created_date || (job.created_at ? job.created_at.slice(0,10) : '')}
                 onChange={e => setForm(p => ({ ...p, created_date: e.target.value }))}
@@ -164,8 +164,8 @@ export function EditJobModal({ job, onClose }) {
             </div>
           </div>
           <div>
-            <label style={labelSt}>Service Type</label>
-            <select value={form.service_type} onChange={upd('service_type')} style={inp}>
+            <label style={labelSt} htmlFor="ej-service-type">Service Type</label>
+            <select id="ej-service-type" value={form.service_type} onChange={upd('service_type')} style={inp}>
               <option value="">— Not set (legacy) —</option>
               <option>Repair / Walk-in</option>
               <option>1st Service</option>
@@ -178,14 +178,14 @@ export function EditJobModal({ job, onClose }) {
           </div>
         </div>
         <div style={{ marginBottom:12 }}>
-          <label style={labelSt}>Complaint / Work Required</label>
-          <textarea value={form.complaint} onChange={upd('complaint')} rows={3}
+          <label style={labelSt} htmlFor="ej-complaint-work-required">Complaint / Work Required</label>
+          <textarea id="ej-complaint-work-required" value={form.complaint} onChange={upd('complaint')} rows={3}
             style={{ ...inp, resize:'vertical', fontFamily:'inherit' }} />
           <ComplaintPicks value={form.complaint} onChange={v => setForm(p => ({ ...p, complaint: v }))} />
         </div>
         <div style={{ marginBottom:20 }}>
-          <label style={labelSt}>Notes</label>
-          <input value={form.notes} onChange={upd('notes')} placeholder="Additional notes" style={inp} />
+          <label style={labelSt} htmlFor="ej-notes">Notes</label>
+          <input id="ej-notes" value={form.notes} onChange={upd('notes')} placeholder="Additional notes" style={inp} />
         </div>
         <CheckinCondition value={form} onChange={patch => setForm(p => ({ ...p, ...patch }))} />
       </div>
@@ -312,8 +312,8 @@ export function NewJobModal({ onClose }) {
       </div>
       {step === 1 ? (
         <div style={{ padding:'20px 20px 0' }}>
-          <label style={labelSt}>Search Customer</label>
-          <input value={custSearch} onChange={e => setCustSearch(e.target.value)}
+          <label style={labelSt} htmlFor="nj-search-customer">Search Customer</label>
+          <input id="nj-search-customer" value={custSearch} onChange={e => setCustSearch(e.target.value)}
             placeholder="Type name or mobile…" style={{ ...inp, marginBottom:8 }} autoFocus />
           {custs.length > 0 && (
             <div style={{ border:'1px solid var(--border)', borderRadius:4, overflow:'hidden', marginBottom:12 }}>
@@ -348,8 +348,8 @@ export function NewJobModal({ onClose }) {
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
             {/* Vehicle picker — shows customer's bikes from sales, or manual entry */}
-            <div style={{ gridColumn:'1 / -1' }}>
-              <label style={labelSt}>Select Vehicle *</label>
+            <div style={{ gridColumn:'1 / -1' }} role="group" aria-labelledby="nj-select-vehicle">
+              <span style={labelSt} id="nj-select-vehicle">Select Vehicle *</span>
 
               {/* Customer bikes from sales */}
               {custVehicles.length > 0 && (
@@ -461,24 +461,24 @@ export function NewJobModal({ onClose }) {
               ['technician','Technician','Suresh'],
             ].map(([k,l,ph]) => (
               <div key={k}>
-                <label style={labelSt}>{l}</label>
-                <input value={form[k]} onChange={upd(k)} placeholder={ph}
+                <label style={labelSt} htmlFor={`nj-${k}`}>{l}</label>
+                <input id={`nj-${k}`} value={form[k]} onChange={upd(k)} placeholder={ph}
                   type={k==='odometer_km'?'number':'text'} style={inp} />
               </div>
             ))}
             <div>
-              <label style={labelSt}>Brand</label>
-              <select value={form.brand} onChange={upd('brand')} style={inp}>
+              <label style={labelSt} htmlFor="nj-brand">Brand</label>
+              <select id="nj-brand" value={form.brand} onChange={upd('brand')} style={inp}>
                 {BRANDS.map(b => <option key={b}>{b}</option>)}
               </select>
             </div>
             <div>
-              <label style={labelSt}>Est. Delivery</label>
-              <input type="date" value={form.estimated_delivery} onChange={upd('estimated_delivery')} style={inp} />
+              <label style={labelSt} htmlFor="nj-est-delivery">Est. Delivery</label>
+              <input id="nj-est-delivery" type="date" value={form.estimated_delivery} onChange={upd('estimated_delivery')} style={inp} />
             </div>
             <div>
-              <label style={labelSt}>Service Type *</label>
-              <select value={form.service_type} onChange={upd('service_type')} style={inp}>
+              <label style={labelSt} htmlFor="nj-service-type">Service Type *</label>
+              <select id="nj-service-type" value={form.service_type} onChange={upd('service_type')} style={inp}>
                 <option>Repair / Walk-in</option>
                 <option>1st Service</option>
                 <option>2nd Service</option>
@@ -510,15 +510,15 @@ export function NewJobModal({ onClose }) {
             </div>
           </div>
           <div style={{ marginBottom:12 }}>
-            <label style={labelSt}>Complaint / Work Required *</label>
-            <textarea value={form.complaint} onChange={upd('complaint')} rows={3}
+            <label style={labelSt} htmlFor="nj-complaint-work-required">Complaint / Work Required *</label>
+            <textarea id="nj-complaint-work-required" value={form.complaint} onChange={upd('complaint')} rows={3}
               placeholder="Engine noise, routine service, brake issue…"
               style={{ ...inp, resize:'vertical', fontFamily:'inherit' }} />
             <ComplaintPicks value={form.complaint} onChange={v => setForm(p => ({ ...p, complaint: v }))} />
           </div>
           <div style={{ marginBottom:20 }}>
-            <label style={labelSt}>Notes</label>
-            <input value={form.notes} onChange={upd('notes')} placeholder="Additional notes" style={inp} />
+            <label style={labelSt} htmlFor="nj-notes">Notes</label>
+            <input id="nj-notes" value={form.notes} onChange={upd('notes')} placeholder="Additional notes" style={inp} />
           </div>
           <CheckinCondition value={form} onChange={patch => setForm(p => ({ ...p, ...patch }))} />
         </div>
