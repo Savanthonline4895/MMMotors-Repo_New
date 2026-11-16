@@ -411,7 +411,7 @@ Job cards carry `checkin_photo_ids` (≤ 8 GridFS ids, validated 24-hex and de-d
 `stock_age_report()` (routes/vehicles.py, pure) buckets in-stock bikes into 0–30 / 31–60 / 61–90 / 90+ days from `inbound_date` (any app date format, via `_parse_any_date`) or, failing that, `created_at`; money tied up = `purchase_price`. Reports → "Unsold stock age" shows buckets, a per-brand table and the 30 longest-waiting bikes.
 
 ### Form labels
-`Field` (components/ui.jsx) renders a `<label>`, so its text names the input inside (screen readers, click-to-focus). Pass `group` when it wraps several controls (it then names a `role="group"`). The service job modals still use sibling `<label style={labelSt}>` without `htmlFor` — not yet associated.
+`Field` (components/ui.jsx) renders a `<label>`, so its text names the input inside (screen readers, click-to-focus). Pass `group` when it wraps several controls (it then names a `role="group"`). The service job modals and service bill keep their sibling `<label style={labelSt}>` layout but link with `htmlFor` → `id` (`ej-*` Edit Job, `nj-*` New Job, `sb-*` bill); "Select Vehicle" names a `role="group"` (bike cards + search). New labels there need an `htmlFor` too.
 
 ### Security
 - No `eval` / `exec` / `pickle` / `yaml.unsafe_load`. No `shell=True`. API keys from env vars only.
